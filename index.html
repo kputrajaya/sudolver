@@ -1,0 +1,278 @@
+<html>
+
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sudolver</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    font-family: 'Calibri', sans-serif;
+    color: #333;
+    box-sizing: border-box;
+  }
+
+  .container {
+    max-width: 500px;
+    padding: 20px;
+    margin: 0 auto;
+  }
+
+  .title {
+    font-size: 24px;
+    font-weight: 600;
+  }
+  .subtitle {
+    font-size: 16px;
+    font-weight: 400;
+    color: #888;
+  }
+  .hint {
+    font-style: italic;
+    color: inherit;
+    border-bottom: 1px dotted #D7D7D7;
+  }
+
+  .sudoku {
+    margin-top: 12px;
+    border-top: 3px solid #333;
+    border-left: 3px solid #333;
+  }
+  .sudoku > .row {
+    border-bottom: 1px solid #333;
+    display: flex;
+  }
+  .sudoku > .row:nth-child(3n) {
+    border-bottom-width: 3px;
+  }
+  .sudoku > .row > .col {
+    text-align: center;
+    border-right: 1px solid #333;
+    flex: 1;
+  }
+  .sudoku > .row > .col:nth-child(3n) {
+    border-right-width: 3px;
+  }
+  .sudoku > .row > .col > .cell {
+    width: 100%;
+    height: 50px;
+    font-weight: 700;
+    text-align: center;
+    background: #F7F7F7;
+    border: 0;
+    outline: 0;
+  }
+  .sudoku > .row > .col > .cell.generated {
+    font-weight: 400;
+    color: #888;
+  }
+
+  .btn-row {
+    margin: 12px -6px 0;
+  }
+  .btn {
+    margin: 0 6px;
+    padding: 6px 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: #F7F7F7;
+    border: 1px solid #333;
+    border-radius: 3px;
+    outline: 0;
+    cursor: pointer;
+  }
+  .btn[disabled] {
+    background: #D7D7D7;
+    cursor: default;
+  }
+</style>
+</head>
+
+<body>
+<div id="app" class="container"></div>
+<script src="https://unpkg.com/preact@10.4.1/dist/preact.umd.js"></script>
+<script src="https://unpkg.com/preact@10.4.1/hooks/dist/hooks.umd.js"></script>
+<script src="https://unpkg.com/htm@3.0.4/dist/htm.umd.js"></script>
+<script>
+  const { h, render } = preact;
+  const { useEffect, useState } = preactHooks;
+  const html = htm.bind(h);
+
+  const ARR_BASE = {length: 9};
+  const ITERATOR = Array.from(ARR_BASE, (val, index) => index + 1);  // [1..9]
+  const API_URL = 'https://sugoku.herokuapp.com/board?difficulty=hard';
+
+  const util = {
+    emptyBoard: () => Array.from(ARR_BASE, () => new Array(9).fill(null)),  // [[null, ..], ..]
+    cloneBoard: (board) => board.map(row => row.slice()),
+    parseInput: (val) => {
+      if (!val) return null;
+      const intVal = Math.floor(val.replace(/\D+/g, ''));
+      return (intVal < 1 || intVal > 9) ? null : intVal;
+    },
+    solve: (board) => {
+      const clonedBoard = util.cloneBoard(board);
+      const possies = Array.from(ARR_BASE, () => Array.from(ARR_BASE, () => new Set(ITERATOR)));  // [[{1..9}, ..], ..]
+      const stat = {remaining: 81};
+
+      // Fill initial numbers
+      clonedBoard.forEach((row, rowIndex) => {
+        row.forEach((val, colIndex) => {
+          util._fill(clonedBoard, possies, stat, rowIndex, colIndex, val);
+        });
+      });
+
+      // Solve recursively
+      const result = util._recurse(clonedBoard, possies, stat);
+      if (!result) {
+        throw new Error('Cannot find any solution');
+      }
+      return result;
+    },
+    _recurse: (board, possies, stat, level=1) => {
+      while (stat.remaining) {
+        // Find cell with minimum possy
+        let min = null;
+        let invalid = false;
+        possies.forEach((row, rowIndex) => {
+          row.forEach((possySet, colIndex) => {
+            if (!possySet.size) {
+              if (!board[rowIndex][colIndex]) {
+                invalid = true;
+              }
+            } else if (!min || possySet.size < possies[min.row][min.col].size) {
+              min = {row: rowIndex, col: colIndex};
+            }
+          });
+        });
+        if (!min || invalid) {
+          return false;
+        }
+
+        const possySet = possies[min.row][min.col];
+
+        // Don't need to branch
+        if (possySet.size === 1) {
+          const val = possySet.values().next().value;
+          util._fill(board, possies, stat, min.row, min.col, val);
+          continue;
+        }
+
+        // Branch using recursion
+        let result = false;
+        possySet.forEach(val => {
+          if (result) return;
+
+          // Deep clone arrays
+          const clonedBoard = util.cloneBoard(board);
+          const clonedPossies = possies.map(row => row.map(set => new Set(set)));
+          const clonedStat = {...stat};
+
+          // Set and recurse
+          util._fill(clonedBoard, clonedPossies, clonedStat, min.row, min.col, val);
+          result = util._recurse(clonedBoard, clonedPossies, clonedStat, level + 1);
+        });
+        return result;
+      }
+      return board;
+    },
+    _fill: (board, possies, stat, rowIndex, colIndex, val) => {
+      if (!val) return;
+
+      // Validate placement
+      if (!possies[rowIndex][colIndex].has(val)) {
+        throw new Error(`Cannot put ${val} in row ${rowIndex + 1} column ${colIndex + 1}`);
+      }
+
+      // Put number and mark cell as occupied
+      board[rowIndex][colIndex] = val;
+      possies[rowIndex][colIndex].clear();
+      stat.remaining--;
+
+      // Mark row and column as invalid
+      ITERATOR.forEach(i => {
+        possies[rowIndex][i - 1].delete(val);
+        possies[i - 1][colIndex].delete(val);
+      });
+
+      // Mark 3x3 group as invalid
+      util._group(rowIndex).forEach(r => {
+        util._group(colIndex).forEach(c => {
+          possies[r][c].delete(val);
+        });
+      });
+    },
+    _group: (index) => {
+      const start = Math.floor(index / 3) * 3;
+      return [start, start + 1, start + 2];
+    }
+  };
+
+  const App = () => {
+    const [board, setBoard] = useState(util.emptyBoard);
+    const [initialBoard, setInitialBoard] = useState(null);
+
+    const solve = () => {
+      try {
+        const start = new Date().getTime();
+
+        const newBoard = util.solve(board);
+        setBoard(newBoard);
+        setInitialBoard(board);
+
+        const end = new Date().getTime();
+        setTimeout(() => alert(`Solved in ${end - start} ms`), 0);
+      } catch (e) {
+        alert(e);
+      }
+    };
+    const random = async () => {
+      const res = await fetch(API_URL);
+      if (!res.ok) {
+        alert('Cannot get random board');
+        return;
+      }
+      const json = await res.json();
+      setBoard(json.board.map(row => row.map(val => val || null)));
+      setInitialBoard(null);
+    };
+    const clear = () => {
+      setBoard(util.emptyBoard());
+      setInitialBoard(null);
+    };
+    const fill = (rowIndex, colIndex, val) => {
+      const intVal = util.parseInput(val);
+      setBoard((prev) => {
+        const clonedBoard = util.cloneBoard(prev);
+        clonedBoard[rowIndex][colIndex] = intVal;
+        return clonedBoard;
+      });
+    };
+
+    return html`
+      <h1 class="title">Sudolver</h1>
+      <h2 class="subtitle">A <span class="hint" title="Single file, without build processes">simple</span> and <span class="hint" title="Only 14 kB gzipped">lightweight</span> Sudoku solver</h2>
+      <div class="sudoku">
+        ${board.map((row, rowIndex) => html`
+          <div class="row">
+            ${row.map((val, colIndex) => html`
+              <div class="col">
+                <input type="tel" className=${'cell ' + (!initialBoard || initialBoard[rowIndex][colIndex] ? '' : 'generated')} disabled=${initialBoard} value=${board[rowIndex][colIndex]} onChange=${(e) => fill(rowIndex, colIndex, e.target.value)} onFocus=${() => fill(rowIndex, colIndex, null)}/>
+              </div>
+            `)}
+          </div>
+        `)}
+      </div>
+      <div class="btn-row">
+        <button class="btn" disabled=${initialBoard} onClick=${solve}>Solve</button>
+        <button class="btn" onClick=${random}>Randomize</button>
+        <button class="btn" onClick=${clear}>Clear</button>
+      </div>
+    `;
+  };
+
+  render(html`<${App}/>`, document.getElementById('app'));
+</script>
+</body>
+
+</html>
