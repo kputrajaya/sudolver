@@ -7,3 +7,4 @@ A simple and lightweight Sudoku solver.
 * [Preact](https://preactjs.com/)
 * [Hyperscript Tagged Markup](https://github.com/developit/htm)
 * [suGOku](https://sugoku.herokuapp.com/) (Randomize board)
+* [Vercel](https://vercel.com/)
