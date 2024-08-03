@@ -6,5 +6,5 @@ A simple and lightweight Sudoku solver.
 
 * [Preact](https://preactjs.com/)
 * [Hyperscript Tagged Markup](https://github.com/developit/htm)
-* [suGOku](https://sugoku.herokuapp.com/)
+* [suGOku](https://sugoku.onrender.com/)
 * [Vercel](https://vercel.com/)
