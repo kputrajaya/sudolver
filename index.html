@@ -98,7 +98,7 @@
 
   const ARR_BASE = {length: 9};
   const ITERATOR = Array.from(ARR_BASE, (val, index) => index + 1);  // [1..9]
-  const API_URL = 'https://sugoku.herokuapp.com/board?difficulty=hard';
+  const API_URL = 'https://sugoku.onrender.com/board?difficulty=hard';
 
   const util = {
     emptyBoard: () => Array.from(ARR_BASE, () => new Array(9).fill(null)),  // [[null, ..], ..]
